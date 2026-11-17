@@ -1,0 +1,8 @@
+librosa>=0.10.2      # pYIN pitch tracking
+soundfile>=0.12.1    # WAV / AIFF / FLAC / MP3 (libsndfile 1.1+ reads MP3)
+soxr>=0.3            # resampling
+numpy>=1.26
+scipy>=1.11
+mido>=1.3            # notes.mid
+PySide6>=6.7         # the window (same toolkit as OrchSketch)
+sounddevice>=0.4.6   # listening to notes in the app

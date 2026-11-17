@@ -1,0 +1,10 @@
+[project]
+name = "vocalchop"
+dynamic = ["version"]
+description = "Vocal Chop Sampler - analysis app (Windows) for pitch-correct vocal chops in Ableton"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: long-running checks"]
+filterwarnings = ["ignore::DeprecationWarning"]
