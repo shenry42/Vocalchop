@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3 — Milestone 3: Natural render (2026-11-16)
+- Rubber Band R3 ("finer") with formants kept, through the `pylibrb` package (installed by `setup.bat`).
+- Every slice rendered at −12..+12 semitones: `renders/slice_XX/±NN.wav`, 24-bit, source rate and channels, the
+  slice's exact length, 3 ms fades, loudness matched to the slice; `+00.wav` is the slice itself.
+- Formant guard for near-pure tones (formants follow the pitch only as far as needed to keep the level), and a click
+  safety (longer fade on an edge that still measures as a click). Both logged in `render.json`.
+- Background rendering starts on Save, several worker processes at once, slice by slice; each slice is playable as
+  soon as its 25 files are in place. Saving again mid-render is safe; closing the app resumes on the next open.
+- Cache by renderHash: only changed audio re-renders; renumbered slices keep their renders; deleted slices' renders
+  are kept in `renders/_unused` for undo. Gain/note/octave/Keep as sung never re-render.
+- Editor: **Natural** column (ready / rendering n/25 / waiting / save to render) and a total at the top right;
+  "Play shifted to C" plays the Natural render the way the device will (nearest semitone + leftover speed change).
+- `check_m3.bat`: renders and measures 3 slices per song (frame-by-frame tuner, pitch curve, length and envelope,
+  formants vs a speed-change control, clicks, level, harmonicity), times a 32-slice Save, checks the cache.
+- `check_m2.bat`: Glide flags within 0.1 st of the line whose ends are 0.75-1 st apart are listed as borderline.
+
 ## v0.2 — Milestone 2: Chopping and editor (2026-11-16)
 - Editor window replaces the Milestone 1 checking window: waveform + pitch curve + slice lines, a region dragged
   over a phrase, slice list (number, start, length, note, Live name, cents, confidence, flags, Keep as sung).

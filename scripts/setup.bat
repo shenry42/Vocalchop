@@ -1,5 +1,6 @@
 @echo off
-REM Vocal Chop Sampler one-time setup: Python 3.12, the project's Python environment, packages, Git.
+REM Vocal Chop Sampler one-time setup: Python 3.12, the project's Python environment, packages (including
+REM Rubber Band for the Natural render, as the pylibrb package: no separate download), Git.
 REM Safe to run again: it skips anything already done.
 setlocal
 cd /d "%~dp0.."
@@ -26,7 +27,7 @@ set "VPY=%ROOT%\.venv\Scripts\python.exe"
 if not exist "%VPY%" goto err_venv
 
 REM ---- 3. Packages ----
-echo [3/5] Installing Python packages (the biggest step)...
+echo [3/5] Installing Python packages, including Rubber Band (the biggest step)...
 "%VPY%" -m pip install --upgrade pip >> "%LOG%" 2>&1
 "%VPY%" -m pip install -r requirements-dev.txt >> "%LOG%" 2>&1
 if errorlevel 1 goto err_pip

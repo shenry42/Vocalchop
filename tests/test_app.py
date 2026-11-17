@@ -88,7 +88,8 @@ def test_audition_original_and_shifted_to_c(window):
     assert sr == SR and x.shape[1] == 2 and np.all(x[0] == 0) and np.all(x[-1] == 0)
     s = w.editor.slices[2]
     assert nearest_c(s) == parse_note("C5") and abs(shift_to(s, parse_note("C5")) - (1 - s.cents / 100)) < 1e-9
-    xc, sr, (target, st) = w.clip("c")
+    xc, sr, (target, st, nat) = w.clip("c")
+    assert nat is None                      # not rendered: plain speed change
     r = tuner_on_clip(xc, sr, 48, 84)
     got = r.midi - w.result.tuning_offset_cents / 100
     assert round(got) == target == parse_note("C5")
@@ -168,3 +169,34 @@ def test_save_and_reopen_restores_the_slices(window, vocalchop_home):
     assert w2.table.rowCount() == w.table.rowCount() and "restored" in w2.info.text()
     assert w2.editor.region == pytest.approx(w.editor.region)
     w2.close()
+
+
+def test_save_renders_in_the_background_and_audition_uses_the_renders(window, app):
+    import time
+
+    w, path = analyzed(*window)
+    w.editor.set_region(0.0, 1.5)                       # the first three notes, to keep the test quick
+    w._chop()
+    n = len(w.editor.slices)
+    assert n == 3
+    assert [w.table.item(r, 9).text() for r in range(n)] == ["save to render"] * n
+    assert w._save()
+    assert w.renderer.wait_idle(300)
+    t0 = time.time()
+    while time.time() - t0 < 5 and w.table.item(0, 9).text() != "ready":
+        app.processEvents()
+        time.sleep(0.02)
+    for _ in range(20):
+        app.processEvents()
+    assert [w.table.item(r, 9).text() for r in range(n)] == ["ready"] * n
+    assert "3 of 3 slices ready" in w.render_label.text()
+    w.table.selectRow(1)
+    xc, sr, (target, st, nat) = w.clip("c")
+    assert nat is not None and abs(nat[1]) <= 0.5      # rendered semitone + a small leftover speed change
+    w._play("c")
+    assert "it is a C" in w.tuner_panel.text() and "Natural render" in w.tuner_panel.text()
+    # an edit makes that slice 'save to render' again; the others stay ready
+    w.editor.move_edge(1, "end", w.editor.slices[1].end - 0.03)
+    w._refresh()
+    states = [w.table.item(r, 9).text() for r in range(n)]
+    assert states[0] == "ready" and states[1] == "save to render"

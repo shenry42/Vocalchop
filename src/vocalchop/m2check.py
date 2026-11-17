@@ -21,7 +21,9 @@ checked; results go to Documents\\Vocalchop\\m2_check_results.txt.
 3. Glide and low-confidence flags on the right slices
    a. every flag matches its definition (Glide = pitch spread over 1.5 st, low confidence = under 60). Goal: 100%.
    b. Glide confirmed independently: the tuner reads the first and last third of each Glide slice of 200 ms or
-      more; they should be at least a semitone apart. Goal: 80%.
+      more; they should be at least a semitone apart. Goal: 80%. Borderline (Milestone 3): a Glide flag within
+      0.1 st of the 1.5 st line whose ends the tuner reads 0.75-1 st apart is a fall or rise of about a semitone,
+      the case the line is drawn through; it is listed but counts neither way (as M1's "borderline" notes).
    c. low confidence, for information: how often the tuner names the same note on low-confidence slices vs the
       others (low confidence should mean the app's note is less certain).
 """
@@ -47,6 +49,8 @@ GOAL_GLIDE = 0.80
 CHANGE_ST = 0.5        # 1a: a confirmed note change
 INSIDE_ST = 1.0        # 1b: a change inside a slice
 GLIDE_ST = 1.0         # 3b
+GLIDE_BORDER_SPREAD = 0.1   # 3b borderline: spread within this of the Glide line...
+GLIDE_BORDER_ST = 0.75      # ...and the tuner's ends at least this far apart
 
 
 @dataclass
@@ -71,6 +75,7 @@ class FileCheck:
     glides_readable: int = 0
     glides_confirmed: int = 0
     glide_failures: list[str] = field(default_factory=list)
+    glide_borderline: list[str] = field(default_factory=list)
     low_conf: int = 0
     agree_low: float = float("nan")
     agree_ok: float = float("nan")
@@ -192,12 +197,17 @@ def check_song(source: Path, preset_key: str) -> FileCheck:
         ra, rb = _read(ctx, lo, hi, s.start, s.start + third), _read(ctx, lo, hi, s.end - third, s.end)
         if ra is None or rb is None:
             continue
+        apart = abs(rb.midi - ra.midi)
+        if apart < GLIDE_ST and s.spread <= p.glide_semitones + GLIDE_BORDER_SPREAD and apart >= GLIDE_BORDER_ST:
+            fc.glide_borderline.append(f"slice {i + 1} at {_t(s.start)} ({s.length * 1000:.0f} ms, spread "
+                                       f"{s.spread:.2f} st): tuner ends {apart:.2f} st apart")
+            continue
         fc.glides_readable += 1
-        if abs(rb.midi - ra.midi) >= GLIDE_ST:
+        if apart >= GLIDE_ST:
             fc.glides_confirmed += 1
         else:
             fc.glide_failures.append(f"slice {i + 1} at {_t(s.start)} ({s.length * 1000:.0f} ms, spread "
-                                     f"{s.spread:.1f} st): tuner start {note_name(ra.note)} {ra.cents:+d} c, end "
+                                     f"{s.spread:.2f} st): tuner start {note_name(ra.note)} {ra.cents:+d} c, end "
                                      f"{note_name(rb.note)} {rb.cents:+d} c")
     # 3c. low confidence vs agreement with the tuner
     agree = {True: [], False: []}
@@ -241,8 +251,11 @@ def report(checks: list[FileCheck], seconds: float) -> str:
         L.append(f"      a. flags not matching their definition: {len(c.flag_mismatch)}")
         L += [f"         {x}" for x in c.flag_mismatch[:12]]
         L.append(f"      b. Glide flags confirmed by the tuner: {c.glides_confirmed} of {c.glides_readable} readable "
-                 f"({c.glide_rate:.0%}); {c.glides} Glide slices in all")
+                 f"({c.glide_rate:.0%}); {c.glides} Glide slices in all" if c.glides_readable else
+                 f"      b. Glide flags confirmed by the tuner: none to judge; {c.glides} Glide slices in all"
+                 + (f", {len(c.glide_borderline)} borderline" if c.glide_borderline else ""))
         L += [f"         not confirmed: {x}" for x in c.glide_failures[:12]]
+        L += [f"         borderline (not counted): {x}" for x in c.glide_borderline[:12]]
         L.append(f"      c. {c.low_conf} low-confidence slices; the tuner names the same note on {c.agree_low:.0%} "
                  f"of them vs {c.agree_ok:.0%} of the confident ones")
         L.append("")

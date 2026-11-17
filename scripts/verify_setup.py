@@ -57,10 +57,30 @@ def _midi():
     return f"{len(names)} MIDI input(s){': ' + ', '.join(names) if names else ''}"
 
 
+def _rubberband():
+    import numpy as np
+    import pylibrb as rb
+
+    sr = 44100
+    x = (0.3 * np.sin(2 * np.pi * 220 * np.arange(sr) / sr)).astype("float32")[None, :]
+    s = rb.RubberBandStretcher(sample_rate=sr, channels=1,
+                               options=rb.Option.PROCESS_OFFLINE | rb.Option.ENGINE_FINER | rb.Option.FORMANT_PRESERVED)
+    s.time_ratio, s.pitch_scale = 1.0, 2 ** (5 / 12)
+    s.set_expected_input_duration(x.shape[1])
+    s.study(x, final=True)
+    s.process(x, final=True)
+    y = s.retrieve_available()
+    f = np.argmax(np.abs(np.fft.rfft(y[0]))) * sr / y.shape[1]
+    if y.shape[1] != x.shape[1] or abs(f - 293.66) > 2:
+        raise RuntimeError(f"+5 semitones of 220 Hz gave {f:.1f} Hz, {y.shape[1]} samples")
+    return f"Rubber Band R3 engine (pylibrb), formants kept: 220 Hz +5 st -> {f:.1f} Hz, same length"
+
+
 print(f"Python {sys.version.split()[0]}")
 check("pitch detection", _pyin)
 check("audio files", _mp3)
 check("window toolkit", _qt)
 check("audio output", _audio)
 check("MIDI input", _midi)
+check("Natural render", _rubberband)
 sys.exit(0 if ok else 1)

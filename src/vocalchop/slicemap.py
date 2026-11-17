@@ -65,7 +65,7 @@ def build_slice_map_from_slices(source: Path, sample_rate: int, tuning_offset_ce
             "keepAsSung": bool(sl.keep_as_sung),
             "gain": round(float(sl.gain), 2),
             "renderFolder": f"renders/slice_{i:02d}",
-            "renderHash": render_hash(source, sample_rate, sl),
+            "renderHash": render_hash(source, sample_rate, sl, fade_ms),
         })
     return {
         "version": MAP_VERSION,

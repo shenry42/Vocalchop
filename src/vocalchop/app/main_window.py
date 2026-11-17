@@ -13,10 +13,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFile
                                QInputDialog, QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar, QPushButton,
                                QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
-from .. import __version__, session
-from ..audition import original_clip, shifted_clip, slice_for_key, tuner_on_clip, tuner_on_slice
+from .. import __version__, render, session
+from ..audition import natural_clip, original_clip, shifted_clip, slice_for_key, tuner_on_clip, tuner_on_slice
+from ..background import BackgroundRenderer
 from ..chop import (CHOP_MODES, EQUAL_COUNTS, MAX_SLICES, MODE_LABELS, ChopSettings, EditError, SliceEditor,
-                    SongContext)
+                    SongContext, render_hash)
 from ..paths import acapellas_dir, home_dir, is_audio_file
 from ..presets import PRESETS, live_note_name, note_name, parse_note, preset_from_key
 from ..project import AnalysisResult, analyze_file, preset_for, remember_preset
@@ -25,12 +26,18 @@ from .editor_view import GLIDE, LOWCONF, EditorView
 from .midi_in import MidiInput, backend_error, list_ports
 from .player import Player
 
-COLUMNS = ["#", "Start", "Length", "Note", "Live name", "Cents", "Conf.", "Flags", "Keep as sung"]
+COLUMNS = ["#", "Start", "Length", "Note", "Live name", "Cents", "Conf.", "Flags", "Keep as sung", "Natural"]
 KEEP_COL = 8
+NATURAL_COL = 9
 PRESET_ORDER = ["male", "female", "instrument", "custom"]
 OK = QColor("#4cc38a")
 BAD = QColor("#ff5c5c")
 TAP_SNAP = 0.060        # a tap within 60 ms of a detected note start lands exactly on it
+
+
+class RenderBridge(QObject):
+    """Carries the background renderer's events (worker thread) to the window (GUI thread)."""
+    event = Signal(object)
 
 
 class AnalysisWorker(QObject):
@@ -69,6 +76,12 @@ class MainWindow(QMainWindow):
         self._filling = False
         self._play_offset: float | None = None   # source time where the playing clip starts (for the playhead)
         self._play_rate = 1.0
+        self._ready: dict[str, Path] = {}       # renderHash -> finished render folder (this song)
+        self._saved_hashes: set[str] = set()    # hashes in the saved slice map
+        self._render_now: tuple[str, int] | None = None   # (hash, files done) of the slice rendering now
+        self._render_bridge = RenderBridge()
+        self._render_bridge.event.connect(self._render_event)
+        self.renderer = BackgroundRenderer(on_event=self._render_bridge.event.emit)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -114,6 +127,10 @@ class MainWindow(QMainWindow):
         self.info = QLabel("")
         self.info.setTextInteractionFlags(Qt.TextSelectableByMouse)
         status.addWidget(self.info, 1)
+        self.render_label = QLabel("")
+        self.render_label.setToolTip("Natural render (Rubber Band, formants kept): every slice at -12..+12 "
+                                     "semitones, in renders\\slice_XX. Starts by itself when you save.")
+        status.addWidget(self.render_label)
         root.addLayout(status)
         self.warning = QLabel("")
         self.warning.setStyleSheet(f"color: {LOWCONF.name()};")
@@ -412,6 +429,9 @@ class MainWindow(QMainWindow):
             f"&nbsp;·&nbsp; {r.preset.label} &nbsp;·&nbsp; {r.audio.duration:.1f} s, {r.audio.sample_rate} Hz, "
             f"{r.audio.channels} ch &nbsp;·&nbsp; {r.seconds:.1f} s{' (pitch from cache)' if r.from_cache else ''}"
             + (" &nbsp;·&nbsp; <b>saved slices restored</b>" if restored else ""))
+        self._load_render_state()
+        if (r.folder / "slicemap.json").exists():
+            self.renderer.request(r.folder)       # finish anything left from last time
         self.warning.setText("  ".join(r.warnings))
         self.warning.setVisible(bool(r.warnings))
         self.view.set_data(r.audio.mono(), r.audio.sample_rate, r.track, r.analysis.voiced_mask,
@@ -475,7 +495,7 @@ class MainWindow(QMainWindow):
             vals = [str(row + 1), _fmt_time(s.start), f"{s.length * 1000:.0f} ms", note_txt,
                     live_note_name(s.note) if (s.has_pitch or hand) else "-",
                     f"{s.cents:+d}" if (s.has_pitch and not hand) else "", str(s.confidence),
-                    ", ".join(f.replace("_", " ") for f in s.flags), ""]
+                    ", ".join(f.replace("_", " ") for f in s.flags), "", ""]
             for col, v in enumerate(vals):
                 it = QTableWidgetItem(v)
                 if col in (0, 5, 6):
@@ -491,6 +511,7 @@ class MainWindow(QMainWindow):
                 self.table.item(row, 7).setForeground(LOWCONF)
             if s.confidence < 60:
                 self.table.item(row, 6).setForeground(LOWCONF)
+        self._update_render_column()
         self.table.blockSignals(False)
         self._filling = False
         if select is not None and 0 <= select < len(slices):
@@ -499,6 +520,94 @@ class MainWindow(QMainWindow):
         else:
             self._set_slice_buttons(False)
             self.tuner_panel.setText("Select a slice" if slices else "No slices yet")
+
+    # ------------------------------------------------------------ Natural render state
+    def _slice_hash(self, s) -> str:
+        r = self.result
+        return render_hash(r.source, r.audio.sample_rate, s, self.editor.settings.fade_ms)
+
+    def _load_render_state(self):
+        r = self.result
+        self._ready = render.ready_hashes(r.folder) if r else {}
+        self._saved_hashes = set()
+        if r and (r.folder / "slicemap.json").exists():
+            try:
+                self._saved_hashes = {s["renderHash"] for s in session.read_slice_map(r.folder / "slicemap.json")
+                                      ["slices"]}
+            except (OSError, ValueError, KeyError):
+                pass
+
+    def slice_render_state(self, s) -> str:
+        """'ready', 'rendering', 'waiting' (saved, in the queue) or 'unsaved'."""
+        h = self._slice_hash(s)
+        if h in self._ready:
+            return "ready"
+        if self._render_now and self._render_now[0] == h:
+            return "rendering"
+        return "waiting" if h in self._saved_hashes else "unsaved"
+
+    def _update_render_column(self):
+        if not self.editor or not self.result:
+            return
+        was = self.table.signalsBlocked()
+        self.table.blockSignals(True)
+        for row, s in enumerate(self.editor.slices):
+            it = self.table.item(row, NATURAL_COL)
+            if it is None:
+                continue
+            st = self.slice_render_state(s)
+            if st == "ready":
+                it.setText("ready")
+                it.setForeground(OK)
+                it.setToolTip("Natural renders done: 25 files, -12..+12 semitones")
+            elif st == "rendering":
+                it.setText(f"rendering {self._render_now[1]}/25")
+                it.setForeground(LOWCONF)
+                it.setToolTip("Rendering now")
+            elif st == "waiting":
+                it.setText("waiting")
+                it.setForeground(QColor("#aaaaaa"))
+                it.setToolTip("Saved; waiting for its turn in the Natural render")
+            else:
+                it.setText("save to render")
+                it.setForeground(QColor("#888888"))
+                it.setToolTip("This slice's audio isn't saved yet: Save starts its Natural render")
+        self.table.blockSignals(was)
+
+    def _render_event(self, e):
+        if not self.result or Path(e.project) != Path(self.result.folder).resolve():
+            if e.kind == "error":
+                self.statusBar().showMessage(f"Natural render failed for {Path(e.project).name}: "
+                                             f"{e.message.splitlines()[0]}", 15000)
+            return
+        if e.kind == "file":
+            try:
+                m = session.read_slice_map(self.result.folder / "slicemap.json")
+                h = next(s["renderHash"] for s in m["slices"] if s["index"] == e.index)
+                self._render_now = (h, e.files)
+            except (OSError, ValueError, StopIteration, KeyError):
+                pass
+            self.render_label.setText(f"Natural render: {e.done} of {e.total} slices ready · "
+                                      f"slice {e.index}: {e.files}/25")
+        elif e.kind == "slice":
+            self._render_now = None
+            self._load_render_state()
+            self.render_label.setText(f"Natural render: {e.done} of {e.total} slices ready")
+        elif e.kind == "start":
+            self._load_render_state()
+            self.render_label.setText(f"Natural render: {e.done} of {e.total} slices ready"
+                                      + (f" · {e.message}" if e.total != e.done else ""))
+        elif e.kind == "idle":
+            self._render_now = None
+            self._load_render_state()
+            col = OK if e.done == e.total else LOWCONF
+            self.render_label.setText(f"<span style='color:{col.name()}'>Natural render: {e.done} of {e.total} "
+                                      f"slices ready</span>")
+        elif e.kind == "error":
+            self._render_now = None
+            self.render_label.setText(f"<span style='color:{BAD.name()}'>Natural render failed</span>")
+            self.statusBar().showMessage(f"Natural render failed: {e.message.splitlines()[0]}", 20000)
+        self._update_render_column()
 
     def selected_index(self) -> int | None:
         rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
@@ -721,9 +830,12 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.warning(self, "Can't save yet", str(exc))
             return False
-        changed = (f"{len(rep.changed)} slice{'s' if len(rep.changed) != 1 else ''} changed, queued for the "
-                   f"Natural render (Milestone 3)") if rep.changed else "no slice audio changed"
-        self.statusBar().showMessage(f"Saved {rep.map_path.name}: {rep.count} slices, {changed}.", 12000)
+        changed = (f"{len(rep.changed)} slice{'s' if len(rep.changed) != 1 else ''} changed"
+                   if rep.changed else "no slice audio changed")
+        self.statusBar().showMessage(f"Saved {rep.map_path.name}: {rep.count} slices, {changed}. The Natural "
+                                     f"render runs in the background (Natural column).", 12000)
+        self._load_render_state()
+        self.renderer.request(self.result.folder)
         self._refresh()
         return True
 
@@ -736,8 +848,15 @@ class MainWindow(QMainWindow):
         s = self.editor.slices[i]
         a = self.result.audio
         if kind == "c":
+            folder = self._ready.get(self._slice_hash(s))
+            if folder is not None:
+                try:
+                    x, target, st, k, rest = natural_clip(folder, a.sample_rate, s)
+                    return x, a.sample_rate, (target, st, (k, rest))
+                except (OSError, RuntimeError):
+                    pass                              # a render file went missing: fall back to speed change
             x, target, st = shifted_clip(a.data, a.sample_rate, s)
-            return x, a.sample_rate, (target, st)
+            return x, a.sample_rate, (target, st, None)
         return original_clip(a.data, a.sample_rate, s), a.sample_rate, None
 
     def _play(self, kind: str, i: int | None = None):
@@ -748,7 +867,7 @@ class MainWindow(QMainWindow):
         i = self.selected_index() if i is None else i
         s = self.editor.slices[i]
         if kind == "c":
-            target, st = extra
+            target, st, nat = extra
             r = self.result
             reading = tuner_on_clip(x, sr, r.preset.low, r.preset.high)
             if reading.ok:
@@ -760,7 +879,9 @@ class MainWindow(QMainWindow):
                     f"(Live {live_note_name(target)}) · built-in tuner on what you hear: <b>{note_name(reading.note)}"
                     f"</b> {reading.cents:+d} c → <b style='color:{col.name()}'>"
                     f"{'it is a C' if ok else 'NOT a C'}</b> <span style='color:#888'>(the song's own tuning is "
-                    f"{r.tuning_offset_cents:+.0f} c; until Milestone 3 this audition is a plain speed change)</span>")
+                    f"{r.tuning_offset_cents:+.0f} c; " + (f"Natural render {render.shift_name(nat[0])[:-4]} + {nat[1] * 100:+.0f} c "
+                    f"speed change, as the device plays it)" if nat else "not rendered yet, so this is a plain speed "
+                    "change)") + "</span>")
             self._play_offset, self._play_rate = None, 1.0
         else:
             self._play_offset, self._play_rate = s.start, 1.0
@@ -928,6 +1049,7 @@ class MainWindow(QMainWindow):
             return
         self._stop()
         self.midi.close()
+        self.renderer.stop(wait=5.0)
         if self.thread and self.thread.isRunning():
             self.thread.quit()
             self.thread.wait(3000)

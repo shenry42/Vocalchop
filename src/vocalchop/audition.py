@@ -1,12 +1,14 @@
 """Audition clips for the editor (SPEC §3.4 "audition (original, or shifted to C)").
 
-Until the Rubber Band renders arrive (Milestone 3) "shifted to C" is a plain speed change (varispeed): the pitch
-is exactly right, the length and the formants change with it. The built-in tuner reads the shifted clip so the
-result can be checked on screen instead of by ear.
+"Shifted to C" plays the slice the way the device will in Natural mode once its renders are ready (Milestone 3):
+the nearest rendered semitone plus the leftover as a tiny speed change. Before the renders exist it is a plain
+speed change (varispeed), where the length and the formants move with the pitch. Either way the built-in tuner
+reads the clip, so the result can be checked on screen instead of by ear.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -60,6 +62,19 @@ def shifted_clip(data: np.ndarray, sr: int, sl: Slice, target: int | None = None
     target = nearest_c(sl) if target is None else target
     st = shift_to(sl, target)
     return varispeed(slice_audio(data, sr, sl), sr, st), target, st
+
+
+def natural_clip(render_folder, sr: int, sl: Slice, target: int | None = None):
+    """(clip, target, shift, rendered semitone, leftover) from the slice's Natural renders, like the device."""
+    import soundfile as sf
+
+    from .render import natural_plan, shift_name
+
+    target = nearest_c(sl) if target is None else target
+    st = shift_to(sl, target)
+    k, rest = natural_plan(st)
+    x, fsr = sf.read(str(Path(render_folder) / shift_name(k)), dtype="float32", always_2d=True)
+    return varispeed(x, fsr, rest), target, st, k, rest
 
 
 def tuner_on_clip(clip: np.ndarray, sr: int, low_midi: int, high_midi: int) -> TunerReading:

@@ -32,7 +32,7 @@ CHOP_MODES = ("pitch", "silence", "equal", "manual")
 MODE_LABELS = {"pitch": "Pitch", "silence": "Silence gate", "equal": "Equal", "manual": "Manual"}
 EQUAL_COUNTS = (4, 8, 16, 32)
 MAX_SLICES = 32
-RENDER_SETTINGS = "rubberband-r3-fine-formants|range-12..12|24bit|v1"   # part of each slice's render hash (SPEC §4)
+RENDER_SETTINGS = "rubberband-r3-finer-formants|pylibrb|raw-edges|formant-guard3|levelmatch|clicksafe|range-12..12|24bit|nogain|v2"   # in each render hash (SPEC §4)
 
 
 @dataclass
@@ -432,8 +432,9 @@ def click_score(x: np.ndarray, sr: int, edge_ms: float = 2.0, ref_ms: float = 20
     return out[0], out[1]
 
 
-def render_hash(source: Path, sample_rate: int, sl: Slice) -> str:
-    """Changes when the slice's boundaries, its source file or the render settings change (SPEC §4 cache)."""
+def render_hash(source: Path, sample_rate: int, sl: Slice, fade_ms: float = 3.0) -> str:
+    """Changes when the slice's boundaries, its source file or the render settings change (SPEC §4 cache).
+    Gain, note, octave and Keep as sung are not in it: the device applies those live, so they never re-render."""
     p = Path(source)
     try:
         st = p.stat()
@@ -441,7 +442,7 @@ def render_hash(source: Path, sample_rate: int, sl: Slice) -> str:
     except OSError:
         ident = p.as_posix()
     a, b = int(round(sl.start * sample_rate)), int(round(sl.end * sample_rate))
-    raw = f"{ident}|{sample_rate}|{a}|{b}|{RENDER_SETTINGS}"
+    raw = f"{ident}|{sample_rate}|{a}|{b}|{RENDER_SETTINGS}" + (f"|fade{fade_ms:g}" if fade_ms != 3.0 else "")
     return hashlib.sha1(raw.encode()).hexdigest()[:16]
 
 

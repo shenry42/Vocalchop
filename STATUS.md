@@ -4,131 +4,161 @@
 > The chat that finishes a milestone updates this file before it ends.
 
 ## Current state
-- **Version:** v0.2 (tag `v0.2` on GitHub once `backup.bat` has run)
-- **Last milestone completed:** 2 — Chopping and editor (2026-11-16): 79 tests pass in Claude's workspace;
-  `check_m2.bat` meets all three goals on all 3 test files; Milestone 1's note check still met on all 3.
-  **To confirm on Sam's PC:** `setup.bat` (adds MIDI), `run_tests.bat`, `check_m2.bat`, then `backup.bat`.
-- **Next:** Milestone 3 — Natural render (SPEC §7).
+- **Version:** v0.3 (tag `v0.3` on GitHub once `backup.bat` has run)
+- **Last milestone completed:** 3 — Natural render (2026-11-16): 93 tests pass in Claude's workspace and
+  on Sam's PC (`run_tests.bat`, 131 s; run before the file-move retry fix below, which `backup.bat`'s test run
+  covers); `check_m3.bat` meets every goal on all 4 songs on Sam's PC (`m3_check_results.txt`, 2026-11-16 23:08; identical numbers to Claude's workspace).
+- **Next:** Milestone 4 — Device: Natural playback (SPEC §7).
 - **Repo:** https://github.com/shenry42/vocalchop (public). On disk:
   `Documents\Vocalchop-Dev`. Projects, test files, settings and check results: `Documents\Vocalchop`.
-- **Last updated:** 2026-11-16 (Milestone 2 done)
+- **Last updated:** 2026-11-16 (Milestone 3 done)
 
 ## Milestones (SPEC §7)
 - [x] 1 — v0.1 Pitch analysis (2026-11-16)
 - [x] 2 — v0.2 Chopping and editor (2026-11-16)
-- [ ] 3 — Natural render
+- [x] 3 — v0.3 Natural render (2026-11-16)
 - [ ] 4 — Device: Natural playback
 - [ ] 5 — Device: Vintage mode and playing controls
 - [ ] 6 — Polish and v1.0 release
 
-## Milestone 2 check (automatic, no listening)
-Goal (SPEC §7): Pitch mode lands cuts on note changes; no clicks at slice edges; Glide and low-confidence flags on
-the right slices. `check_m2.bat` chops each whole song and writes `Documents\Vocalchop\m2_check_results.txt`
-(**the next chat reads it first**). Goals were fixed before running on the real files, except the 1b refinement
-noted below.
+## Render time (measured on Sam's PC)
+From `check_m3.bat` on Sam's PC (i7-9700K, 7 worker processes), 2026-11-16:
+- **One slice, all 25 files: 1.2 s per second of slice** (median of 11 slices; range 0.8-2.7 s; the slowest are
+  Crazy's long notes, where the formant guard renders some shifts twice or more).
+- **A 32-slice Save** (Crave You, 11.8 s of audio): **all ready in 21.1 s**; the first slice playable after 0.7 s.
+- Cache: a second request takes 0.1 s and renders nothing.
+- For comparison, Claude's 2-core workspace (1 worker): 4.1 s per second of slice, 55 s for the same Save.
+- Disk: stereo 44.1 kHz renders take about 260 KB per second of slice per file (25 files per slice).
 
-Result in Claude's workspace (2026-11-16):
+## Milestone 3 check (automatic, no listening)
+Goal (SPEC §7): renders of 3 slices at −12, −5, +5 and +12 check out, measured. `check_m3.bat` picks 3 slices per
+song by fixed rules (held vowel, consonant start, vibrato), renders all 25 shifts with the real background renderer
+into `Documents\Vocalchop\m3_check` and writes `Documents\Vocalchop\m3_check_results.txt`. The goals count all 24
+shifted files of every checked slice, not only the 4 headline shifts. 4 songs (Ms. Jackson added; it has no slice
+with vibrato, so 11 slices, 264 renders).
 
-| | Crave You | Crazy | Summertime Sadness |
-|---|---|---|---|
-| Pitch slices (whole song) | 351 | 264 | 174 |
-| 1a. legato cuts confirmed as note changes by the tuner (goal ≥ 90%) | 134/134 (100%) | 85/90 (94%) | 21/21 (100%) |
-| 1b. slices without vibrato hiding a change (goal ≤ 10%) | 1/180 | 1/26 | 1/22 |
-| 2. clicks (goal 0); for comparison, raw cuts 0.7 ms off zero, no fade | 0 of 878 edges (raw: 347) | 0 of 710 (raw: 315) | 0 of 450 (raw: 166) |
-| 3a. flags not matching their definition (goal 0) | 0 | 0 | 0 |
-| 3b. Glide flags confirmed by the tuner (goal ≥ 80%) | 1/1 | 7/7 | 0/0 |
-| 3c. tuner agrees with the note: low-confidence vs confident slices | 100% vs 100% | 80% vs 93% | 98% vs 99% |
+| Measurement (goal) | Claude's workspace | Sam's PC (2026-11-16 23:08) |
+|---|---|---|
+| Pitch, built-in tuner frame by frame (≥ 95% within 10 c, no wrong notes) | 264/264, median 0.5 c | same |
+| Pitch curve, pYIN minus the shift (≥ 90% within 10 c) | 257/257, median 1.6 c | same |
+| Length (100% exact; envelope lag ≤ 5 ms on 100%) | 264/264; 264/264 | same |
+| Formants kept (≥ 90% of unguarded renders; control must move) | 228/234 (97%), median 0.25 st; control 264/264 | same |
+| Formant guard used | 30 of 264 (Crazy 24, Crave 6), formants follow 0.25-0.75 | same |
+| Clicks (0) and ends on 0 | 0 of 528 edges; 0 | same |
+| Level within ±1.5 dB; new clipping | 264/264; 0 | same |
+| Harmonicity within 3 dB (≥ 90%) | 253/264 (96%), median +0.7 dB | same |
+| +00 identical to the slice | 11/11 | same |
+| Cache: second request / renumbering 27 slices / undo + Save | 0 / 0 (27 kept) / 0 re-rendered | same |
 
-- The 5 unconfirmed legato cuts on Crazy are all on bent or wide-vibrato notes (the tuner reads the same note
-  name either side, a few tens of cents apart).
-- **1b refinement (made after the first run, with evidence):** the first run counted vibrato slices and Crazy came
-  out at 6/55 (11%).
-  - Four of the six were single held notes with ±0.8–1.4 st vibrato; the other two were bends inside a note.
-  - On single synthetic notes (no change at all) the halves test false-alarms on 28 of 131 with detected vibrato,
-    and on 16 of 148 without (those 16 are fast, wide vibratos the detector missed; steady notes and scoops gave
-    none).
-  - So the goal counts slices without vibrato. Vibrato slices are still listed in the report (Crazy: 5 of 29
-    differ by halves).
-- Milestone 1 note check after all Milestone 2 changes (`analyze_acapellas.bat`): Crave You 10/10, Crazy 9/10,
-  Summertime Sadness 10/10 check notes. All sustained notes: Crave 206/208, Crazy 54+3 borderline/62, Lana 28/28.
-  There are more sustained notes than before because legato notes are no longer shortened.
+What the numbers show:
+- **Pitch** is exact: median 0.5 c from the requested shift, worst 6 c; the pitch curve (vibrato included) follows
+  the original to a median 1.6 c.
+- **Formants:** where the guard didn't step in, 97% of renders fit "formants kept" better than "moved", median
+  movement 0.25 st. The 6 that didn't: Lana's consonant slice at −7 and +12, and Ms. Jackson's held note at +9;
+  the other 3 are ±1-2 st shifts (Lana −2/−1, Ms. Jackson −1), where "kept" and "moved" are too close to tell apart.
+- **Harmonicity** (harmonics vs the gaps between them): 8 of the 11 misses are Ms. Jackson's held note shifted
+  down 5-12 st (3-6 dB rougher); the other 3 are Crazy's vibrato note at −12, −11 and +8 (3.3-3.5 dB). Upward
+  shifts are usually cleaner than the original (+1 to +5 dB).
+- **pYIN voiced share (information only):** at −12, pYIN calls 3-93% of frames voiced, while harmonicity stays
+  within −3.5 to +1.9 dB of the original, so pYIN's voicing is not a fault measure here.
 
-## Open question settled: whole note or steadiest part? → neither; vibrato-aware
-Synthetic study (`tests/study_note_pitch.py`, 140 notes through the real pYIN pipeline, intended pitch known).
-RMS error in cents (worst case):
+### Changes to the check after the first run on the real files (with evidence)
+The first run met pitch curve, length (samples), formants and cache, and missed the others. Each change below was
+made only after showing that the measure itself was wrong, or by fixing the renderer, never by loosening a goal:
+- **Tuner frame by frame.** Read over the whole slice, the tuner was off by up to 73 c on vibrato slices, and by
+  55-65 c on a plain speed change of the same slice, whose pitch is exact by construction (averaging over
+  the wobble lets the formants decide which part of it wins). Frame by frame (100 ms, same times in both): within
+  4 c on the same files.
+- **Harmonicity instead of pYIN's voiced share.** pYIN's voiced share fell to 0-30% on formant-kept octave-down
+  renders of Lana and Crazy (a plain speed change of the Lana slice kept 86%). Their harmonic-to-gap level stayed within
+  1 dB of the original, and the odd/even harmonic balance was normal, so pYIN's voicing is a poor fault measure
+  here.
+- **Formant guard (a renderer change):** see below. It fixed the level misses (up to −18 dB) and the envelope-lag
+  misses (10-18 ms, all on the same quiet renders).
+- **Raw edges instead of 50 ms context (a renderer change):** the one click (Crave, +11) was the next syllable's
+  consonant bleeding back through the engine's window.
 
-| Case | Whole note (M1) | Steadiest 200 ms | **Vibrato-aware (now default)** |
-|---|---|---|---|
-| Scoop into the note | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
-| Fall-off at the end | 0.6 (2.0) | 0.3 (0.6) | 0.6 (2.0) |
-| Symmetric vibrato | 8.7 (25.0) | 16.5 (52.4) | **3.2 (12.7)** |
-| Two short dips | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
-| Bent (starts −45 c) | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
+## Decisions made in Milestone 3 (also in SPEC §9)
+- **Engine: `pylibrb`** (Rubber Band Library, R3 "finer", formants preserved, offline mode), pinned to 0.1.2.
+  Option A (Sam). Same build in the tests and on Sam's PC; `setup.bat` installs it; `verify_setup.py` checks a
+  +5 st shift of 220 Hz.
+- **Faded slice or raw edges? → raw edges, fades after.** Study (`fade_study`: 40 slices × −12/−5/+5/+12, 320 edges
+  per variant; then 100 slices × 10 shifts, 2000 edges):
 
-- **Why vibrato-aware:**
-  - Medians already ignore scoops, falls and dips.
-  - Vibrato is where the median errs: with uneven vibrato cycles it lands near the top or the bottom of the wobble.
-  - Listening studies put a vibrato note's pitch at its mean.
-  - "Steadiest part" is the worst method on vibrato.
-- **The rule (`notes.measure_pitch`, method `auto`):**
-  - A note with vibrato (`has_vibrato`: 3.5–9 Hz, at least 12 c RMS, at least 1.5 cycles) takes the median of the
-    150 ms-smoothed pitch, after dropping frames more than 0.8 st from the whole-note median.
-  - Any other note keeps the whole-note median.
-- **Effect on the real files:** 3 of 793 notes renamed; Crazy's tuner disagreements remain on wide-vibrato notes,
-  where the tuner's middle-70% window is itself unreliable (e.g. #249: a 1.4 st peak-to-peak vibrato).
+  | Variant | Clicks | HF bleed at the outer 5 ms (> +6 dB) | Edge level vs middle |
+  |---|---|---|---|
+  | Faded slice in, nothing after | **33/320** | – | −1.1 dB |
+  | Faded slice in, fades again | 0/320 | – | −1.2 dB |
+  | Raw edges, fades after (**chosen**) | 0/320, 1/2000 | **0.5%** | −1.1 dB |
+  | 50 ms context, trim, fades | 0/320, 0/2000 (1/528 in the check) | 4.4% | −0.7 dB |
+  | 200 ms context, trim, fades | 0/320 | – | −0.7 dB |
+
+  Rendering the faded slice leaves non-zero ends (the engine smears the fade). Context helps the edge level a
+  little, but lets neighbouring sound (the next consonant) bleed into the slice. Raw edges keep a chop to its own
+  audio. A click safety covers the rest: an edge that still measures as a click gets a 6 ms, then 10 ms fade
+  (logged as `fadeMs` per file).
+- **Level matching:** the engine loses about 1 dB (median), more at the edges. Each render is scaled to the
+  slice's RMS (at most ±6 dB, peak ≤ 0.999), so a slice plays equally loud on every key.
+- **Formant guard:** Crazy's flute-like notes (fundamental 24-37 dB above the 2nd harmonic) lost 9-20 dB at +9 to
+  +12 with formants kept: formant keeping treats the fundamental as a formant and filters it away when it moves.
+  Scan of 48 slices: 21% of +12 renders lost more than 6 dB, almost all on Crazy. Rule: a render more than 3 dB
+  quieter than the slice lets its formants follow the pitch ¼, ½, ¾ or all the way, the least that keeps the level
+  within 3 dB (`GUARD_DB`, `GUARD_FOLLOW` in `render.py`). In the check it acted on 30 of 264 renders (Crazy's two
+  long notes from ±4 up, Crave's consonant slice from +7). The rest keep their formants fully.
+- **Glide at 1.5 st: no change.** Ms. Jackson repeats one gesture (a fall of about a semitone, 720 ms) four times:
+  spreads 1.40, 1.47, 1.51, 1.52 st; the tuner reads falls of 0.84-1.22 st. Any line through that gesture splits it.
+  On the Pitch slices of all 4 songs:
+
+  | Rule | Flagged | Tuner confirms | Slides ≥ 1 st not flagged |
+  |---|---|---|---|
+  | spread > 1.5 (current) | 10 | 6/8 | 4 |
+  | spread > 1.55 | 7 | 5/5 | 5 |
+  | spread > 1.6 | 6 | 4/4 | 6 |
+  | spread > 1.5 and ≥ 1 st travel | 9 | 5/7 | 5 |
+
+  No rule was better on both counts, and Glide is only a hint with a one-click split. `check_m2.bat` now lists a
+  Glide flag within 0.1 st of the line whose ends the tuner reads 0.75-1 st apart as *borderline* (not counted).
+  Ms. Jackson's two flags are borderline, so all 4 songs now meet the Milestone 2 goals.
+- **Cache and folders:** renders follow the renderHash. A slice renders in `renders\_rendering\<hash>` and moves to
+  its `slice_XX` folder complete; `render.json` (written last) marks it playable. Renumbering moves folders;
+  deleted slices' renders go to `renders\_unused` (undo + Save restores them; trimmed above 500 MB).
+  `render_queue.json` lists `ready` and `pending`.
+- **Background:** one renderer thread for the app, the 25 files of a slice spread over worker processes (all cores
+  but one), slices in order. A new Save restarts the pass after the current slice (or cancels it at once if that
+  slice changed). Closing the app stops between files; the next open or Save resumes.
+- **Audition "shifted to C"** now plays the Natural render the device's way: nearest rendered semitone + leftover
+  speed change (≤ ±50 c), and the tuner panel says which file and how many cents.
 
 ## Test results (latest run)
-- Automated, Claude's workspace (Linux, Python 3.13): **79 passed**. Files and what they cover:
-  - `test_analysis` 20, `test_outputs` 14, `test_tuner` 15: from Milestone 1.
-  - `test_chop` 19: legato cuts within 25 ms, pre-roll, region clipping, zero crossings, 0 clicks, click detector,
-    short-piece merging, silence gate, equal, manual, Glide / low-confidence on the right slices, consonant before
-    a legato cut, wide vibrato not a Glide, edits and undo, the 32 limit, save / queue / reopen.
-  - `test_app` 8: the editor window headless.
-  - `test_pitch_method` 2, `test_m2check` 1.
-- Windows `run_tests.bat`: **to be run by Sam** (Milestone 1: 55 passed in 24 s).
-- Speed: `check_m2` takes about 5 s for the 3 files with the pitch cache.
+- Automated, Claude's workspace (Linux, Python 3.13): **93 passed** (79 before). New:
+  - `test_render` 13: pitch and length, formants kept vs a speed-change control, the device's nearest-semitone plan,
+    formant guard, 25 files 24-bit faded and level-matched, +00 identical, cache (gain/note never re-render; edges
+    do), renumber/park/restore, interrupted renders cleaned up, background render (threads and processes), saving
+    mid-render, a second request renders nothing, Natural audition is a C.
+  - `test_app` +1: Save → Natural column turns "ready", audition uses the render, an edit marks the slice
+    "save to render".
+- Windows `run_tests.bat` (Sam): **93 passed** in 131 s.
 
-## Decisions made in Milestone 2 (also in SPEC §9)
-- **Region:** chops run inside a region dragged on the top strip (or Shift + drag); one slice map per song (Sam).
-  Save refuses more than 32 slices.
-- **MIDI keyboard (Sam):** mido + python-rtmidi.
-  - Keys from Live's C1 (MIDI 36) play slice 1, 2, 3...
-  - Tap to chop: Space or any MIDI key while the region plays. Taps snap to a detected note start within 60 ms and
-    are corrected for the audio output latency.
-- **Pre-roll** never into the slice before (Sam: "default to you").
-  - Legato cuts get none, except that a consonant burst in the 20 ms before a Pitch / Silence gate legato cut moves
-    the cut back to it.
-  - Equal and Manual cuts are never moved.
-- **Short pieces:** a piece under 60 ms merges into a neighbour within 100 ms; otherwise it's widened to 60 ms.
-- **Zero-crossing snap** within 5 ms on the mono mix; 3 ms raised-cosine fades (slice_audio) make the first and
-  last sample exactly 0 in every channel.
-- **Note splitter changes** (they also changed the Milestone 1 analysis):
-  - Legato changes now meet where the pitch crosses halfway. pYIN marks the slide unvoiced, which had started each
-    next note 33–52 ms late.
-  - A long slide is no longer cut at its start: the halfway-crossing search reached only 80 ms.
-  - Glide spread is measured on the vibrato-smoothed pitch.
-- **Clicks** are detected automatically (`chop.click_score`). Score = the sharpest sample step within 2 ms of the
-  edge (counting the step from silence) ÷ the sharpest step in the next 20 ms. A click is a score of 2 or more,
-  ignoring steps under −60 dBFS.
-- **Save** writes `slicemap.json` (with `renderHash`, `fadeMs`), `editor.json` and `render_queue.json`. Analysis no
-  longer writes `slicemap.json`. The Milestone 1 maps in the project folders stay until the first Save.
-- **Audition "shifted to C":** a plain speed change (soxr) to the C nearest the slice's note, using the device's
-  formula at 100% Correction. The tuner reads the result and the window says "it is a C".
-- The Milestone 1 Pass/Fail marking UI is gone; `analyze_acapellas.bat` still writes `check_results.txt`.
-
-## Notes for the next chat (Milestone 3)
-- Start by reading `Documents\Vocalchop\m2_check_results.txt`; if Sam's numbers match the table above, Milestone 2
-  is confirmed.
-- **Render queue:** `render_queue.json` in each project lists the slices waiting to render (`renderHash`, start,
-  end, `renderFolder`). Hook the background render to `session.save`. Render from `chop.slice_audio` (fades
-  included) or from the raw edges plus fades applied after rendering: decide and test for clicks with
-  `chop.click_score`.
+## Notes for the next chat (Milestone 4: device, Natural playback)
+- `Documents\Vocalchop\m3_check_results.txt` holds the Milestone 3 numbers from Sam's PC.
+- A Windows-only fix found on Sam's PC: right after the 25 files were written, renaming the slice's folder failed
+  once (the first check run stopped on Lana; most likely the virus scanner holding the new files). File moves and
+  renames now retry for up to 10 s (`render._retry`), and the check reports a render error instead of waiting.
+- **Which files to play:** `renders/slice_XX/±NN.wav` (`+00`, `+05`, `-12`...). A slice is playable only if
+  `renders/slice_XX/render.json` exists and its `renderHash` equals the slice's `renderHash` in `slicemap.json`;
+  otherwise fall back to Vintage-style varispeed of the source (or stay silent) until it is ready.
+  `render_queue.json` has `ready` / `pending` slice numbers for a quick look; poll it while rendering.
+- **The plan per note** is `render.natural_plan(shift)`: nearest whole semitone k (clamped to ±12) plus a speed
+  change of the leftover (≤ ±50 c inside the range; beyond ±12 the end file plus varispeed). The editor's audition
+  already does exactly this (`audition.natural_clip`), with the tuner confirming a C.
 - **Open for Milestone 4:**
   - The device formula (SPEC §5.2) doesn't use `tuningOffsetCents`, so pressing C plays C + the song's offset.
-    Decide whether the device should add or remove the offset.
-  - The device should apply `fadeMs` at slice edges.
-- **Known limitation from Milestone 1:** pYIN marks some passages as unvoiced (e.g. Crazy's intro 0:20–0:27, and
-  synthetic vibrato of ±0.8 st or more), so Pitch mode finds few slices there. Silence gate or Manual mode covers
-  them.
-- Docs-only changes after a release: `scripts\commit_docs.bat`. Milestone 3 needs version 0.3 in
-  `src/vocalchop/__init__.py`.
+    Decide whether the device should add or remove the offset. (The editor's "it is a C" judges after removing the
+    song's offset, i.e. the song's own tuning.)
+  - The renders already have their 3 ms fades; the device's `fadeMs` fades on top are harmless (a few files have
+    6-10 ms fades from the click safety, see `render.json` → `files` → `fadeMs`).
+  - Per-slice `gain` is not in the renders: the device applies it.
+- Render files are stereo when the source is (all 4 test songs are): about 260 KB per second of slice per file at
+  44.1 kHz, so 32 one-second slices ≈ 210 MB. polybuffer~ loads all of them; check memory in Live.
+- Docs-only changes after a release: `scripts\commit_docs.bat`. Milestone 4 is the first Max for Live work (no
+  Python version bump needed unless the app changes).

@@ -3,8 +3,8 @@
 Save writes, in the song's project folder:
   slicemap.json       the slice map the device loads (up to 32 slices)
   editor.json         region, chop settings and every slice with its hand edits, so reopening restores them
-  render_queue.json   the slices whose audio changed since the last save: Milestone 3's background render
-                      picks these up (SPEC §3.4 "starts the Natural render for any slice that changed")
+  render_queue.json   which slices are ready and which still need the Natural render; the background renderer
+                      (background.py) starts on Save and keeps it up to date (SPEC §3.4, §4)
 """
 from __future__ import annotations
 
@@ -49,24 +49,8 @@ def save(result, editor: SliceEditor) -> SaveReport:
                                     editor.settings.fade_ms)
     write_slice_map(m, map_path)
     changed = [s["index"] for s in m["slices"] if s["renderHash"] not in before]
-    queue_path = folder / "render_queue.json"
-    queue = []
-    if queue_path.exists():
-        try:
-            queue = json.loads(queue_path.read_text(encoding="utf-8")).get("pending", [])
-        except (OSError, ValueError):
-            queue = []
-    live = {s["renderHash"] for s in m["slices"]}
-    pending = {q["renderHash"]: q for q in queue if q.get("renderHash") in live}
-    for s in m["slices"]:
-        if s["index"] in changed:
-            pending[s["renderHash"]] = {k: s[k] for k in ("index", "start", "end", "renderHash", "renderFolder")}
-    for s in m["slices"]:          # numbering may have moved since the slice was queued
-        if s["renderHash"] in pending:
-            pending[s["renderHash"]].update(index=s["index"], renderFolder=s["renderFolder"])
-    queue_path.write_text(json.dumps({"note": "Slices waiting for the Natural render (Milestone 3).",
-                                      "pending": sorted(pending.values(), key=lambda q: q["index"])}, indent=2),
-                          encoding="utf-8")
+    from .background import write_queue
+    write_queue(folder, m)          # what still needs the Natural render (renders already on disk count as ready)
     state = {
         "version": EDITOR_VERSION,
         "app": f"Vocal Chop Sampler {__version__}",

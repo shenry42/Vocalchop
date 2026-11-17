@@ -109,8 +109,9 @@ Natural mode is rendered ahead of time, so live playback has no added delay. Eac
 semitone from −12 to +12 around its own pitch: 25 files per slice (render range **±12**; wider costs more files and
 render time).
 
-- **Engine:** Rubber Band (R3 "fine" engine, formant preservation on), run through its command-line tool. GPL is fine
-  for personal use; a commercial licence would only matter if the tool were ever sold.
+- **Engine:** Rubber Band (R3 "fine" engine, formant preservation on), through the `pylibrb` package (the Rubber
+  Band Library itself, installed by `setup.bat`; see §9). GPL is fine for personal use; a commercial licence would
+  only matter if the tool were ever sold.
 - **Fine pitch is handled live, not rendered.** The device picks the nearest rendered semitone and covers the leftover
   (never more than ±50 cents) with a tiny speed change. That keeps the Correction slider, Exact/Nearest switch and
   Octave knob live, with no re-render.
@@ -246,3 +247,24 @@ detection, is tested first, before any playback is built.
 - 2026-11-16 (Milestone 2): audition "shifted to C" is a plain speed change until the Milestone 3 renders exist;
   the built-in tuner confirms the shifted clip is a C. "Click or tap" = clicking in the view, or Tap to chop with
   Space or a MIDI key while the region plays (MIDI keys also play slices from Live's C1 up).
+- 2026-11-16 (Milestone 3): **engine route.** Rubber Band through the `pylibrb` Python package (the same library and
+  R3 engine, offline mode) instead of the command-line tool: `setup.bat` installs it with the other packages (no
+  download from breakfastquay.com, which Claude's workspace can't reach), and the tests run the same build Sam's PC
+  runs (Sam, option A).
+- 2026-11-16 (Milestone 3): **what is rendered.** The raw slice (no context), shifted, then trimmed and given the
+  slice's 3 ms fades (rendering the already-faded slice clicked on 33 of 320 edges; 50 ms of neighbouring audio as
+  context let the next syllable's consonant bleed into the edge on 4.4% of edges vs 0.5%). Each render's loudness is
+  matched to the slice (the engine loses about 1 dB). An edge that still measures as a click gets a 6 ms, then
+  10 ms fade. Renders carry no per-slice gain (the device applies it).
+- 2026-11-16 (Milestone 3): **formant guard.** A render that comes out more than 3 dB quieter than the slice (a near-pure
+  tone whose strongest "formant" is its own fundamental) lets its formants follow the pitch ¼, ½, ¾ or all the way,
+  the least that keeps the level. Logged per file in `render.json`.
+- 2026-11-16 (Milestone 3): **render folders** follow the renderHash, not the slice number: renumbered slices move
+  their folders, deleted ones wait in `renders/_unused` (reused by undo + Save, trimmed above 500 MB). A slice renders
+  in `renders/_rendering/<hash>` and is moved into place complete; `renders/slice_XX/render.json` (written last,
+  holding the renderHash) marks it playable. `render_queue.json` lists `ready` and `pending` slices.
+- 2026-11-16 (Milestone 3): **Glide rule unchanged** (spread over 1.5 st). Ms. Jackson's two flags at spread 1.51 and
+  1.52 st are a fall of about a semitone that the song repeats four times (spreads 1.40-1.52, tuner falls
+  0.84-1.22 st); the alternatives tried (a higher line, or also requiring 1 st of travel) traded fewer
+  unconfirmed flags for more missed slides on the 4 songs. The Milestone 2 check lists such flags as borderline
+  (within 0.1 st of the line, tuner ends 0.75-1 st apart) and counts them neither way.
