@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2 — Milestone 2: Chopping and editor (2026-11-16)
+- Editor window replaces the Milestone 1 checking window: waveform + pitch curve + slice lines, a region dragged
+  over a phrase, slice list (number, start, length, note, Live name, cents, confidence, flags, Keep as sung).
+- Four chop modes inside the region: Pitch, Silence gate (−45 dBFS, 60 ms), Equal (4/8/16/32), Manual (click, or
+  Tap to chop while the region plays). Shared rules: 20 ms pre-roll (never into the slice before), zero-crossing
+  snap, 3 ms fades, pieces under 60 ms merged (a lone short piece is widened instead), at most 32 slices per map.
+- Edit actions: drag a boundary (shared lines move both slices), split (suggested point or double-click), merge,
+  delete, ±1 octave, set the note by hand, Keep as sung, undo/redo; right-click menu.
+- Audition: the slice as the device plays it, or shifted to the nearest C with the built-in tuner confirming the
+  result on screen. Play region, playhead.
+- MIDI keyboard input (mido + python-rtmidi): keys from Live's C1 play slices; MIDI keys or Space tap-chop.
+- Save writes slicemap.json (+ `renderHash` per slice, `fadeMs`), editor.json (restored on reopening) and
+  render_queue.json for the Milestone 3 render. Analysis no longer overwrites slicemap.json.
+- Note naming: vibrato-aware pitch (whole-note median, or the median of the vibrato-smoothed pitch on notes with
+  vibrato). The open question "whole note or steadiest part" settled by a synthetic study (STATUS.md).
+- Note splitter fixes: legato changes are cut where the pitch crosses halfway (pYIN marks the slide unvoiced, which
+  started each next note 33-52 ms late); a consonant burst just before a legato cut goes to the next slice; long
+  slides are no longer cut at their start. Glide = spread of the vibrato-smoothed pitch, so wide vibrato is no
+  longer flagged Glide.
+- `check_m2.bat`: automatic check of cuts (built-in tuner), clicks (edge step vs the audio next to it) and flags,
+  written to m2_check_results.txt.
+
 ## v0.1 — Milestone 1: Pitch analysis (2026-11-16)
 - Loads WAV, AIFF, FLAC and MP3 at any sample rate; analysis on a mono copy at 22.05 kHz.
 - pYIN pitch tracking (librosa) in 20 s chunks on several cores, with each voiced frame refined to about 1 cent.

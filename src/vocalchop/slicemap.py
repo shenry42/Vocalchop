@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+
+import numpy as np
 from pathlib import Path
 
 from .notes import Note
@@ -35,6 +37,44 @@ def build_slice_map(source: Path, sample_rate: int, tuning_offset_cents: float, 
         "tuningOffsetCents": int(round(tuning_offset_cents)),
         "renderRange": list(RENDER_RANGE),
         "slices": slices,
+    }
+
+
+def build_slice_map_from_slices(source: Path, sample_rate: int, tuning_offset_cents: float, slices: list,
+                                fade_ms: float = 3.0) -> dict:
+    """Map for the editor's slices (chop.Slice), numbered 1.. in time order.
+
+    Besides the SPEC §2.1 fields each slice carries `renderHash` (boundaries + source + render settings, for the
+    Milestone 3 render cache) and the map carries `fadeMs` (the device applies the same 3 ms edge fades).
+    """
+    from .chop import render_hash
+
+    if len(slices) > MAX_SLICES:
+        raise ValueError(f"A slice map holds at most {MAX_SLICES} slices ({len(slices)} given)")
+    out = []
+    for i, sl in enumerate(sorted(slices, key=lambda x: x.start), start=1):
+        flags = list(sl.flags) + (["note_set_by_hand"] if sl.hand_note is not None else [])
+        out.append({
+            "index": i,
+            "start": round(sl.start, 6),
+            "end": round(sl.end, 6),
+            "note": int(sl.note),
+            "cents": int(np.clip(sl.cents, -50, 50)),
+            "confidence": int(sl.confidence),
+            "flags": flags,
+            "keepAsSung": bool(sl.keep_as_sung),
+            "gain": round(float(sl.gain), 2),
+            "renderFolder": f"renders/slice_{i:02d}",
+            "renderHash": render_hash(source, sample_rate, sl),
+        })
+    return {
+        "version": MAP_VERSION,
+        "source": Path(source).resolve().as_posix(),
+        "sampleRate": int(sample_rate),
+        "tuningOffsetCents": int(round(tuning_offset_cents)),
+        "renderRange": list(RENDER_RANGE),
+        "fadeMs": float(fade_ms),
+        "slices": out,
     }
 
 

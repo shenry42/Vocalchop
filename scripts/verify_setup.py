@@ -49,9 +49,18 @@ def _audio():
     return f"default output: {d['name']}"
 
 
+def _midi():
+    import mido
+    import rtmidi  # noqa: F401
+
+    names = mido.get_input_names()
+    return f"{len(names)} MIDI input(s){': ' + ', '.join(names) if names else ''}"
+
+
 print(f"Python {sys.version.split()[0]}")
 check("pitch detection", _pyin)
 check("audio files", _mp3)
 check("window toolkit", _qt)
 check("audio output", _audio)
+check("MIDI input", _midi)
 sys.exit(0 if ok else 1)

@@ -227,3 +227,22 @@ detection, is tested first, before any playback is built.
   notes picked evenly across the song, not the most confident ones.
 - 2026-11-16: folder names follow the folders Sam created: `Documents\Vocalchop` and `Documents\Vocalchop-Dev`
   (Windows ignores letter case, so the Doc's `VocalChop` paths point to the same place).
+- 2026-11-16 (Milestone 2): **a region.** Chopping runs inside a region dragged over a phrase (default: the whole
+  song); the map gets that region's slices, and Save refuses more than 32. One slice map per song (Sam).
+- 2026-11-16 (Milestone 2): **pre-roll** never reaches into the slice before. Between legato notes the 20 ms would
+  only add the previous note at the wrong pitch, so legato cuts get no pre-roll, except that a consonant burst in
+  the 20 ms before a detected (Pitch / Silence gate) legato cut moves the cut back to the burst. Equal and Manual
+  cuts stay exactly where they were put.
+- 2026-11-16 (Milestone 2): a slice under 60 ms merges into a neighbour only if one is within 100 ms; a lone short
+  piece between silences is widened to 60 ms instead of merging across the silence.
+- 2026-11-16 (Milestone 2): **note pitch** (the STATUS open question): not the steadiest part. The note is the
+  whole-note RMS-weighted median as before, except on notes with vibrato, where it is the median of the
+  vibrato-smoothed pitch after dropping frames more than 0.8 st from the note. Numbers in STATUS.md.
+- 2026-11-16 (Milestone 2): **Glide** = 10th-90th percentile spread of the vibrato-smoothed pitch over 1.5 st (on
+  the raw pitch, wide vibrato counted as a glide: 11 of 25 checked Glide flags on Crazy were vibrato).
+- 2026-11-16 (Milestone 2): the slice map carries two extra keys the device may ignore: `renderHash` per slice
+  (the §4 cache hash) and `fadeMs` (3: the device should apply the same edge fades). Times are written to the
+  microsecond so zero-crossing edges survive.
+- 2026-11-16 (Milestone 2): audition "shifted to C" is a plain speed change until the Milestone 3 renders exist;
+  the built-in tuner confirms the shifted clip is a C. "Click or tap" = clicking in the view, or Tap to chop with
+  Space or a MIDI key while the region plays (MIDI keys also play slices from Live's C1 up).

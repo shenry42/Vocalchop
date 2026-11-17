@@ -1,7 +1,8 @@
 """Analyzing one source file into its project folder (Documents\\Vocalchop\\<name>\\).
 
 Files written there:
-  slicemap.json     the test slice map (SPEC §2.1), up to 32 notes
+  slicemap.json     the slice map (SPEC §2.1), written only by the editor's Save (session.py) since Milestone 2
+  editor.json       the editor's region, chop settings and slices, so reopening the song restores them
   notes.json        every detected note, with the same fields plus names and times
   notes.mid         the detected notes as MIDI (120 BPM)
   guide.wav         reference tones at the detected notes, lined up with the source
@@ -218,7 +219,6 @@ def export_slice_map(result: AnalysisResult, first_index: int = 1) -> Path:
 
 def write_outputs_for(result: AnalysisResult) -> None:
     f = result.folder
-    export_slice_map(result)
     (f / "notes.json").write_text(json.dumps(notes_json(result), indent=2), encoding="utf-8")
     write_notes_midi(f / "notes.mid", result.notes, result.source.stem)
     write_guide_wav(f / "guide.wav", result.notes, result.tuning_offset_cents, result.audio.duration,

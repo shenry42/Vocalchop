@@ -1,5 +1,5 @@
 @echo off
-REM Starts the Vocal Chop Sampler analysis window.
+REM Starts the Vocal Chop Sampler editor window.
 cd /d "%~dp0.."
 set "PYTHONPATH=%CD%\src"
 if not exist ".venv\Scripts\pythonw.exe" (

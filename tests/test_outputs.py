@@ -36,6 +36,8 @@ def test_project_folder_and_slice_map_match_the_spec(take, vocalchop_home):
     r = analyze_file(take, "female")
     folder = vocalchop_home / "hook take"
     assert r.folder == folder
+    assert not (folder / "slicemap.json").exists()     # since Milestone 2 only the editor's Save writes it
+    export_slice_map(r)
     for name in ("slicemap.json", "notes.json", "notes.mid", "guide.wav", "pitch_cache.npz", "analysis_log.txt"):
         assert (folder / name).exists(), name
     m = read_slice_map(folder / "slicemap.json")

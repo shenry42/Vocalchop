@@ -4,92 +4,131 @@
 > The chat that finishes a milestone updates this file before it ends.
 
 ## Current state
-- **Version:** v0.1 (tag `v0.1` on GitHub)
-- **Last milestone completed:** 1 — Pitch analysis (2026-11-16): 55 tests pass on Windows, built-in tuner check met
-  on all 3 test files, backed up (GitHub push + `releases\vocalchop-v0.1-src.zip`, copy in
-  `Documents\Vocalchop\Backups`).
-- **Next:** Milestone 2 — Chopping and editor (SPEC §7).
+- **Version:** v0.2 (tag `v0.2` on GitHub once `backup.bat` has run)
+- **Last milestone completed:** 2 — Chopping and editor (2026-11-16): 79 tests pass in Claude's workspace;
+  `check_m2.bat` meets all three goals on all 3 test files; Milestone 1's note check still met on all 3.
+  **To confirm on Sam's PC:** `setup.bat` (adds MIDI), `run_tests.bat`, `check_m2.bat`, then `backup.bat`.
+- **Next:** Milestone 3 — Natural render (SPEC §7).
 - **Repo:** https://github.com/shenry42/vocalchop (public). On disk:
   `Documents\Vocalchop-Dev`. Projects, test files, settings and check results: `Documents\Vocalchop`.
-- **Last updated:** 2026-11-16 (Milestone 1 done)
+- **Last updated:** 2026-11-16 (Milestone 2 done)
 
 ## Milestones (SPEC §7)
 - [x] 1 — v0.1 Pitch analysis (2026-11-16)
-- [ ] 2 — Chopping and editor
+- [x] 2 — v0.2 Chopping and editor (2026-11-16)
 - [ ] 3 — Natural render
 - [ ] 4 — Device: Natural playback
 - [ ] 5 — Device: Vintage mode and playing controls
 - [ ] 6 — Polish and v1.0 release
 
-## Milestone 1 note check
-Goal (SPEC §7): on 3 acapellas, at least 9 of 10 sustained notes match on a tuner.
-**Changed 2026-11-16:** Sam can't reliably judge notes by ear, so the check uses the app's **built-in tuner**
-(`tuner.py`, a spectral method independent of the pYIN analysis) on 10 sustained notes per file, picked evenly across
-the song. Ableton's Tuner is an optional cross-check via each project's `tuner_check.wav` / `tuner_check.txt`.
-Results land in `Documents\Vocalchop\check_results.txt` — **the next chat reads that file first.**
+## Milestone 2 check (automatic, no listening)
+Goal (SPEC §7): Pitch mode lands cuts on note changes; no clicks at slice edges; Glide and low-confidence flags on
+the right slices. `check_m2.bat` chops each whole song and writes `Documents\Vocalchop\m2_check_results.txt`
+(**the next chat reads it first**). Goals were fixed before running on the real files, except the 1b refinement
+noted below.
 
-Result in Claude's workspace (2026-11-16), check notes / all sustained notes:
-- Crave You: **10/10** match; all sustained 196/197 (1 different: #257 181.28 s, app A3 +6, tuner G#3 +42).
-- Crazy: **9/10** match (check note #10 = note #254 at 169.04 s is different: app G4 −5, tuner F#4 +33, 72 c apart);
-  all sustained 39 match + 4 borderline + 3 different of 46. All disagreements are one semitone on bent notes.
-- Summertime Sadness: **10/10**; all 24/24.
-- (Ms. Jackson, not a test file: 9/9.)
-→ goal met on all 3 files. **Sam's PC (Windows, 2026-11-16) gave identical results** (check_results.txt 20:46).
-Not done (optional): Ableton's Tuner on Crazy's `tuner_check.wav` note 10, to see which method is right there.
+Result in Claude's workspace (2026-11-16):
 
-Test files in `Documents\Vocalchop\Acapellas` (range presets saved in `Documents\Vocalchop\settings.json`):
+| | Crave You | Crazy | Summertime Sadness |
+|---|---|---|---|
+| Pitch slices (whole song) | 351 | 264 | 174 |
+| 1a. legato cuts confirmed as note changes by the tuner (goal ≥ 90%) | 134/134 (100%) | 85/90 (94%) | 21/21 (100%) |
+| 1b. slices without vibrato hiding a change (goal ≤ 10%) | 1/180 | 1/26 | 1/22 |
+| 2. clicks (goal 0); for comparison, raw cuts 0.7 ms off zero, no fade | 0 of 878 edges (raw: 347) | 0 of 710 (raw: 315) | 0 of 450 (raw: 166) |
+| 3a. flags not matching their definition (goal 0) | 0 | 0 | 0 |
+| 3b. Glide flags confirmed by the tuner (goal ≥ 80%) | 1/1 | 7/7 | 0/0 |
+| 3c. tuner agrees with the note: low-confidence vs confident slices | 100% vs 100% | 80% vs 93% | 98% vs 99% |
 
-| File | Range | Offset | Notes / sustained | Notes |
-|---|---|---|---|---|
-| Crave You (Vox).wav | Female | −3.4 c | 352 / 197 | Clean, digital silence between phrases. |
-| Lana Del Rey - Summertime Sadness (Studio Acapella).mp3 | Female | −6.0 c | 175 / 24 | Constant reverb/noise floor (~−48 dB) under the voice; pYIN voicing is low (13% voiced), 16 low-confidence notes. Really sings down to E3. |
-| Gnarls-Barkley-Crazy-Studio-Acapella-4B-112-sd43.mp3 | Custom C2–F5 | +9.9 c | 266 / 46 | Male, but sings up to C5, above the Male preset's top, so a custom range. Many bent notes (±30–45 c) and 36 glides: the hard case for note naming. |
-| Outkast - Ms. Jackson (Studio Acca).mp3 | Male | −23.2 c | 54 / 9 | **Not one of the 3 test files.** Mostly rap; the chorus looks stacked (several voices), so only 9 sustained notes, all the same E4. Replaced by Crazy. |
+- The 5 unconfirmed legato cuts on Crazy are all on bent or wide-vibrato notes (the tuner reads the same note
+  name either side, a few tens of cents apart).
+- **1b refinement (made after the first run, with evidence):** the first run counted vibrato slices and Crazy came
+  out at 6/55 (11%).
+  - Four of the six were single held notes with ±0.8–1.4 st vibrato; the other two were bends inside a note.
+  - On single synthetic notes (no change at all) the halves test false-alarms on 28 of 131 with detected vibrato,
+    and on 16 of 148 without (those 16 are fast, wide vibratos the detector missed; steady notes and scoops gave
+    none).
+  - So the goal counts slices without vibrato. Vibrato slices are still listed in the report (Crazy: 5 of 29
+    differ by halves).
+- Milestone 1 note check after all Milestone 2 changes (`analyze_acapellas.bat`): Crave You 10/10, Crazy 9/10,
+  Summertime Sadness 10/10 check notes. All sustained notes: Crave 206/208, Crazy 54+3 borderline/62, Lana 28/28.
+  There are more sustained notes than before because legato notes are no longer shortened.
+
+## Open question settled: whole note or steadiest part? → neither; vibrato-aware
+Synthetic study (`tests/study_note_pitch.py`, 140 notes through the real pYIN pipeline, intended pitch known).
+RMS error in cents (worst case):
+
+| Case | Whole note (M1) | Steadiest 200 ms | **Vibrato-aware (now default)** |
+|---|---|---|---|
+| Scoop into the note | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
+| Fall-off at the end | 0.6 (2.0) | 0.3 (0.6) | 0.6 (2.0) |
+| Symmetric vibrato | 8.7 (25.0) | 16.5 (52.4) | **3.2 (12.7)** |
+| Two short dips | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
+| Bent (starts −45 c) | 0.3 (0.6) | 0.3 (0.6) | 0.3 (0.6) |
+
+- **Why vibrato-aware:**
+  - Medians already ignore scoops, falls and dips.
+  - Vibrato is where the median errs: with uneven vibrato cycles it lands near the top or the bottom of the wobble.
+  - Listening studies put a vibrato note's pitch at its mean.
+  - "Steadiest part" is the worst method on vibrato.
+- **The rule (`notes.measure_pitch`, method `auto`):**
+  - A note with vibrato (`has_vibrato`: 3.5–9 Hz, at least 12 c RMS, at least 1.5 cycles) takes the median of the
+    150 ms-smoothed pitch, after dropping frames more than 0.8 st from the whole-note median.
+  - Any other note keeps the whole-note median.
+- **Effect on the real files:** 3 of 793 notes renamed; Crazy's tuner disagreements remain on wide-vibrato notes,
+  where the tuner's middle-70% window is itself unreliable (e.g. #249: a 1.4 st peak-to-peak vibrato).
 
 ## Test results (latest run)
-- Automated, Claude's workspace (Linux, Python 3.13): **55 passed** (`tests/test_analysis.py` 20, `test_outputs.py`
-  14, `test_app.py` 6, `test_tuner.py` 15). Synthetic voices (`tests/synth.py`) cover: female melody with +14 c detune; offsets −30, 0,
-  +45, −48 c; male C2–G3 without octave errors; ±0.6 st vibrato not split; scoops; legato changes; one note 30 c
-  sharp; glide flagged; noise; ~1-cent pitch refinement; 3-chunk parallel = single-process and a note held across a
-  chunk edge; WAV 24-bit / AIFF / FLAC / MP3 stereo; 48 kHz.
-- Windows `run_tests.bat` (Sam, 2026-11-16): **55 passed** in 24 s. `setup.bat`: Python 3.12.10, librosa 1.0.1,
-  libsndfile 1.2.2 (MP3 OK), PySide6 6.12.0, audio output Focusrite USB Audio.
-- Speed: 5–6 s per 3–4 minute file from scratch on Sam's PC (and in Claude's workspace); ~1 s with the pitch cache.
+- Automated, Claude's workspace (Linux, Python 3.13): **79 passed**. Files and what they cover:
+  - `test_analysis` 20, `test_outputs` 14, `test_tuner` 15: from Milestone 1.
+  - `test_chop` 19: legato cuts within 25 ms, pre-roll, region clipping, zero crossings, 0 clicks, click detector,
+    short-piece merging, silence gate, equal, manual, Glide / low-confidence on the right slices, consonant before
+    a legato cut, wide vibrato not a Glide, edits and undo, the 32 limit, save / queue / reopen.
+  - `test_app` 8: the editor window headless.
+  - `test_pitch_method` 2, `test_m2check` 1.
+- Windows `run_tests.bat`: **to be run by Sam** (Milestone 1: 55 passed in 24 s).
+- Speed: `check_m2` takes about 5 s for the 3 files with the pitch cache.
 
-## Decisions made in this milestone (also in SPEC §9)
-- MP3 accepted as input (Sam, 2026-11-16). Folders are `Documents\Vocalchop` and `Documents\Vocalchop-Dev`.
-- UI toolkit PySide6 on Python 3.12, as OrchSketch. Audio playback in the app: `sounddevice` (default Windows output,
-  shared mode, so Ableton can stay open).
-- **pYIN runs on its default 0.1-semitone grid.** A 0.02 grid made librosa's pYIN collapse to the bottom of the
-  range on real vocals. Instead each voiced frame is refined (`pitch.refine_f0`): squared-difference minimum within
-  ±7% of pYIN's period, parabolic interpolation, ~1 cent; pYIN still decides octave and voicing.
-- Analysis at 22.05 kHz, frame 2048, hop 256 (11.6 ms); 20 s chunks with 1.5 s padding on up to 6 worker processes
-  (`VOCALCHOP_WORKERS` overrides).
-- Note splitter (`notes.py`, Milestone 1 version): voiced = voicing prob > 0.5 and louder than (peak − 45 dB);
-  gaps ≤ 35 ms bridged when the pitch runs smoothly through (fast vibrato drops voicing below 0.5 for 2–3 frames);
-  split decisions on pitch averaged over 150 ms (≈ one vibrato cycle); a cut needs > 0.7 st change, the new note
-  flat within 0.35 st for 80 ms, and not returning within the next 80 ms; cut placed where the raw pitch crosses
-  halfway; pieces < 60 ms merged.
-- Note = RMS-weighted median of voiced frames; tuning offset = circular weighted mean of the notes' cents (weights:
-  length × steadiness × voicedness; glides excluded); confidence = min(1, voicedness/0.85) × steadiness, where
-  steadiness = 1 at ≤ 20 c median absolute deviation, 0 at 100 c. Glide = 10th–90th percentile spread > 1.5 st.
-  "Sustained" for the ear test = ≥ 250 ms, confidence ≥ 60, no glide.
-- Slice map export in M1 uses the raw note boundaries (no 20 ms pre-roll, zero-crossing snap or fades yet: those are
-  chop rules for Milestone 2). The app exports up to 32 notes from the selected note.
-- Range warning only when > 15% of notes sit within 0.5 st of the range edge (5% gave a false alarm on Lana).
-- Built-in tuner (`tuner.py`): middle 70% of the note, 186 ms Hann windows (50% overlap) averaged, 4x zero
-  padding, log harmonic product spectrum (5 harmonics) in the preset range; sub-octave check (strong peaks at 1.5x
-  and 2.5x → an octave lower, for weak fundamentals); pitch = strength-weighted median of the first 8 harmonics'
-  parabolic peaks / h. Steady synthetic notes C2–B5 read within 3 c; vibrato moves the reading ±20–30 c.
-  Verdicts: match / borderline (neighbouring notes, both readings within 35 c of halfway, ≤ 50 c apart: same
-  played pitch at 100% Correction) / different. A note sung "between" notes gets different names from the
-  whole-note median (analysis) and the middle 70% (tuner) — the source of all of Crazy's disagreements.
-- Note names: the app shows scientific (C4 = middle C = MIDI 60) and Live's (C3 = MIDI 60).
+## Decisions made in Milestone 2 (also in SPEC §9)
+- **Region:** chops run inside a region dragged on the top strip (or Shift + drag); one slice map per song (Sam).
+  Save refuses more than 32 slices.
+- **MIDI keyboard (Sam):** mido + python-rtmidi.
+  - Keys from Live's C1 (MIDI 36) play slice 1, 2, 3...
+  - Tap to chop: Space or any MIDI key while the region plays. Taps snap to a detected note start within 60 ms and
+    are corrected for the audio output latency.
+- **Pre-roll** never into the slice before (Sam: "default to you").
+  - Legato cuts get none, except that a consonant burst in the 20 ms before a Pitch / Silence gate legato cut moves
+    the cut back to it.
+  - Equal and Manual cuts are never moved.
+- **Short pieces:** a piece under 60 ms merges into a neighbour within 100 ms; otherwise it's widened to 60 ms.
+- **Zero-crossing snap** within 5 ms on the mono mix; 3 ms raised-cosine fades (slice_audio) make the first and
+  last sample exactly 0 in every channel.
+- **Note splitter changes** (they also changed the Milestone 1 analysis):
+  - Legato changes now meet where the pitch crosses halfway. pYIN marks the slide unvoiced, which had started each
+    next note 33–52 ms late.
+  - A long slide is no longer cut at its start: the halfway-crossing search reached only 80 ms.
+  - Glide spread is measured on the vibrato-smoothed pitch.
+- **Clicks** are detected automatically (`chop.click_score`). Score = the sharpest sample step within 2 ms of the
+  edge (counting the step from silence) ÷ the sharpest step in the next 20 ms. A click is a score of 2 or more,
+  ignoring steps under −60 dBFS.
+- **Save** writes `slicemap.json` (with `renderHash`, `fadeMs`), `editor.json` and `render_queue.json`. Analysis no
+  longer writes `slicemap.json`. The Milestone 1 maps in the project folders stay until the first Save.
+- **Audition "shifted to C":** a plain speed change (soxr) to the C nearest the slice's note, using the device's
+  formula at 100% Correction. The tuner reads the result and the window says "it is a C".
+- The Milestone 1 Pass/Fail marking UI is gone; `analyze_acapellas.bat` still writes `check_results.txt`.
 
-## Notes for the next chat
-- Start by reading `Documents\Vocalchop\check_results.txt` (and `analysis_summary.txt`). If Windows matches the
-  numbers above, Milestone 1 is done (it was). Open question for Milestone 2: on bent notes (Crazy) the whole-note median and
-  the steady middle disagree by up to ~70 c; consider basing the note on the steadiest stretch, since the render
-  and Correction use note + cents.
-- Docs-only changes after a release: `scripts\commit_docs.bat` commits and pushes SPEC/STATUS/README/CHANGELOG.
-- Milestone 2 needs a new version (0.2) in `src/vocalchop/__init__.py` so `backup.bat` can tag it.
+## Notes for the next chat (Milestone 3)
+- Start by reading `Documents\Vocalchop\m2_check_results.txt`; if Sam's numbers match the table above, Milestone 2
+  is confirmed.
+- **Render queue:** `render_queue.json` in each project lists the slices waiting to render (`renderHash`, start,
+  end, `renderFolder`). Hook the background render to `session.save`. Render from `chop.slice_audio` (fades
+  included) or from the raw edges plus fades applied after rendering: decide and test for clicks with
+  `chop.click_score`.
+- **Open for Milestone 4:**
+  - The device formula (SPEC §5.2) doesn't use `tuningOffsetCents`, so pressing C plays C + the song's offset.
+    Decide whether the device should add or remove the offset.
+  - The device should apply `fadeMs` at slice edges.
+- **Known limitation from Milestone 1:** pYIN marks some passages as unvoiced (e.g. Crazy's intro 0:20–0:27, and
+  synthetic vibrato of ±0.8 st or more), so Pitch mode finds few slices there. Silence gate or Manual mode covers
+  them.
+- Docs-only changes after a release: `scripts\commit_docs.bat`. Milestone 3 needs version 0.3 in
+  `src/vocalchop/__init__.py`.
