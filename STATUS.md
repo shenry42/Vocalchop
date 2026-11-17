@@ -4,18 +4,17 @@
 > The chat that finishes a milestone updates this file before it ends.
 
 ## Current state
-- **Version:** v0.1 (Milestone 1 built; the note check passes in Claude's workspace, waiting for the same run on
-  Sam's PC)
-- **Last milestone completed:** none yet. Milestone 1 — Pitch analysis is built and passes the automated tests and
-  the built-in tuner check on all 3 test files (below). It is done when Sam's PC gives the same result, then
-  `scripts\backup.bat` makes the first GitHub push + zip.
-- **Next:** Sam runs setup / tests / analyze on Windows → backup → Milestone 2 (Chopping and editor).
-- **Repo:** https://github.com/shenry42/vocalchop (public; Sam creates it empty, first push by `backup.bat`). On disk:
+- **Version:** v0.1 (tag `v0.1` on GitHub)
+- **Last milestone completed:** 1 — Pitch analysis (2026-11-16): 55 tests pass on Windows, built-in tuner check met
+  on all 3 test files, backed up (GitHub push + `releases\vocalchop-v0.1-src.zip`, copy in
+  `Documents\Vocalchop\Backups`).
+- **Next:** Milestone 2 — Chopping and editor (SPEC §7).
+- **Repo:** https://github.com/shenry42/vocalchop (public). On disk:
   `Documents\Vocalchop-Dev`. Projects, test files, settings and check results: `Documents\Vocalchop`.
-- **Last updated:** 2026-11-16 (Milestone 1 built)
+- **Last updated:** 2026-11-16 (Milestone 1 done)
 
 ## Milestones (SPEC §7)
-- [ ] 1 — Pitch analysis (built 2026-11-16; tuner check passes here, Windows run pending)
+- [x] 1 — v0.1 Pitch analysis (2026-11-16)
 - [ ] 2 — Chopping and editor
 - [ ] 3 — Natural render
 - [ ] 4 — Device: Natural playback
@@ -35,8 +34,8 @@ Result in Claude's workspace (2026-11-16), check notes / all sustained notes:
   all sustained 39 match + 4 borderline + 3 different of 46. All disagreements are one semitone on bent notes.
 - Summertime Sadness: **10/10**; all 24/24.
 - (Ms. Jackson, not a test file: 9/9.)
-→ goal met on all 3 files here. Still to do: the same on Sam's PC (`analyze_acapellas.bat`), optionally Ableton's
-Tuner on Crazy's `tuner_check.wav` note 10 to see which method is right there.
+→ goal met on all 3 files. **Sam's PC (Windows, 2026-11-16) gave identical results** (check_results.txt 20:46).
+Not done (optional): Ableton's Tuner on Crazy's `tuner_check.wav` note 10, to see which method is right there.
 
 Test files in `Documents\Vocalchop\Acapellas` (range presets saved in `Documents\Vocalchop\settings.json`):
 
@@ -53,8 +52,9 @@ Test files in `Documents\Vocalchop\Acapellas` (range presets saved in `Documents
   +45, −48 c; male C2–G3 without octave errors; ±0.6 st vibrato not split; scoops; legato changes; one note 30 c
   sharp; glide flagged; noise; ~1-cent pitch refinement; 3-chunk parallel = single-process and a note held across a
   chunk edge; WAV 24-bit / AIFF / FLAC / MP3 stereo; 48 kHz.
-- Windows `run_tests.bat`: not run yet (Sam).
-- Speed (Claude's workspace, 2 cores): 4.9–8.2 s per 3–5 minute file from scratch; ~1 s when the pitch cache is used.
+- Windows `run_tests.bat` (Sam, 2026-11-16): **55 passed** in 24 s. `setup.bat`: Python 3.12.10, librosa 1.0.1,
+  libsndfile 1.2.2 (MP3 OK), PySide6 6.12.0, audio output Focusrite USB Audio.
+- Speed: 5–6 s per 3–4 minute file from scratch on Sam's PC (and in Claude's workspace); ~1 s with the pitch cache.
 
 ## Decisions made in this milestone (also in SPEC §9)
 - MP3 accepted as input (Sam, 2026-11-16). Folders are `Documents\Vocalchop` and `Documents\Vocalchop-Dev`.
@@ -88,7 +88,8 @@ Test files in `Documents\Vocalchop\Acapellas` (range presets saved in `Documents
 
 ## Notes for the next chat
 - Start by reading `Documents\Vocalchop\check_results.txt` (and `analysis_summary.txt`). If Windows matches the
-  numbers above, Milestone 1 is done. Open question for Milestone 2: on bent notes (Crazy) the whole-note median and
+  numbers above, Milestone 1 is done (it was). Open question for Milestone 2: on bent notes (Crazy) the whole-note median and
   the steady middle disagree by up to ~70 c; consider basing the note on the steadiest stretch, since the render
   and Correction use note + cents.
-- Then, if the goal is met: `backup.bat` (first push), tick Milestone 1, and start Milestone 2.
+- Docs-only changes after a release: `scripts\commit_docs.bat` commits and pushes SPEC/STATUS/README/CHANGELOG.
+- Milestone 2 needs a new version (0.2) in `src/vocalchop/__init__.py` so `backup.bat` can tag it.
